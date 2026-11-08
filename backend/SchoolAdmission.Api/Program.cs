@@ -1,9 +1,19 @@
+using Microsoft.EntityFrameworkCore;
+using SchoolAdmission.Api.Data;
+
 var builder = WebApplication.CreateBuilder(args);
+
+var connectionString = builder.Configuration
+.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Database connection string is missing.");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
