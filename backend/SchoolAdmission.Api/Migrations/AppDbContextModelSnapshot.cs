@@ -76,6 +76,11 @@ namespace SchoolAdmission.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClassId", "StudentId")
+                        .IsUnique()
+                        .HasDatabaseName("pux_seat_holds_class_student_active")
+                        .HasFilter("status IN ('HELD', 'CONFIRMED')");
+
                     b.HasIndex("ClassId", "Status", "ExpiresAt");
 
                     b.ToTable("seat_holds", (string)null);

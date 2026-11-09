@@ -44,6 +44,11 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
             
             entity.HasIndex(h => new { h.ClassId, h.Status, h.ExpiresAt });
+
+            entity.HasIndex(h => new { h.ClassId, h.StudentId })
+                .IsUnique()
+                .HasDatabaseName("pux_seat_holds_class_student_active")
+                .HasFilter("status IN ('HELD', 'CONFIRMED')");
         });
     }
 }
