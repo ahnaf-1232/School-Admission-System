@@ -15,6 +15,13 @@ public enum HoldCreationStatus
     NoSeats
 }
 
+public enum HoldActionOutcome
+{
+    Success,
+    NotFound,
+    Conflict
+}
+
 public record HoldCreationResult(
     HoldCreationStatus Status,
     HoldCreatedResponse? Data = null
@@ -145,5 +152,150 @@ public class HoldService
                 hold.ExpiresAt
             )
         );
+    }
+
+    public async Task<HoldStatusResponse?> GetByIdAsync(
+        Guid holdId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var hold = await _db.Holds
+            .AsNoTracking()
+            .Where(h => h.Id == holdId)
+            .Select(
+                h => new
+                {
+                    h.Id,
+                    h.ClassId,
+                    h.Status,
+                    h.ExpiresAt
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (hold is null) return null;
+
+        return new HoldStatusResponse(
+            hold.Id,
+            hold.ClassId,
+            GetEffectiveStatus(
+                hold.Status,
+                hold.ExpiresAt,
+                DateTime.UtcNow
+            ),
+            hold.ExpiresAt
+        );
+    }
+
+    public async Task<List<MyHoldResponse>> GetMyHoldsAsync(
+        string studentId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var holds = await _db.Holds
+            .AsNoTracking()
+            .Where(h => h.StudentId == studentId)
+            .OrderByDescending(h => h.CreatedAt)
+            .Select(h => new
+            {
+                h.Id,
+                h.ClassId,
+                ClassName = h.Class.Name,
+                h.Status,
+                h.ExpiresAt
+            })
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+
+        return holds.Select(h => new MyHoldResponse(
+            h.Id,
+            h.ClassId,
+            h.ClassName,
+            GetEffectiveStatus(
+                h.Status,
+                h.ExpiresAt,
+                now
+            ),
+            h.ExpiresAt
+        )).ToList();
+    }
+
+    public async Task<HoldActionOutcome> ConfirmAsync(
+        Guid holdId,
+        string studentId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var affectedRows = await _db.Database
+            .ExecuteSqlInterpolatedAsync(
+                $@"
+                UPDATE seat_holds
+                SET status = 'CONFIRMED'
+                WHERE id = {holdId}
+                AND student_id = {studentId}
+                AND status = 'HELD'
+                AND expires_at > clock_timestamp()
+                ",
+                cancellationToken
+            );
+
+            if (affectedRows == 1) return HoldActionOutcome.Success;
+
+            var existingStatus = await _db.Holds
+                .AsNoTracking()
+                .Where(h => h.Id == holdId && h.StudentId == studentId)
+                .Select(h => (HoldStatus?)h.Status)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (existingStatus == null) return HoldActionOutcome.NotFound;
+            
+            if (existingStatus == HoldStatus.CONFIRMED) return HoldActionOutcome.Success;
+
+            return HoldActionOutcome.Conflict;
+    }
+
+    public async Task<HoldActionOutcome> CancelAsync(
+        Guid holdId,
+        string studentId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var affectedRows = await _db.Database
+            .ExecuteSqlInterpolatedAsync(
+                $@"
+                UPDATE seat_holds
+                SET status = 'CANCELLED'
+                WHERE id = {holdId}
+                AND student_id = {studentId}
+                AND status = 'HELD'
+                AND expires_at > clock_timestamp()
+                ",
+                cancellationToken
+            );
+
+            if (affectedRows == 1) return HoldActionOutcome.Success;
+
+            var existingStatus = await _db.Holds
+                .AsNoTracking()
+                .Where(h => h.Id == holdId && h.StudentId == studentId)
+                .Select(h => (HoldStatus?)h.Status)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (existingStatus == null) return HoldActionOutcome.NotFound;
+
+            if (existingStatus == HoldStatus.CANCELLED) return HoldActionOutcome.Success;
+
+            return HoldActionOutcome.Conflict;
+    }
+
+    private static string GetEffectiveStatus(
+        HoldStatus status,
+        DateTime expiresAt,
+        DateTime now
+    )
+    {
+        if (status == HoldStatus.HELD && expiresAt <= now) return HoldStatus.EXPIRED.ToString();
+
+        return status.ToString();
     }
 }

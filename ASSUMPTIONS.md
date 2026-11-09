@@ -24,3 +24,25 @@
 - Expired holds are processed by a background worker.
 - The worker checks every second while the API is running.
 - Expired holds are excluded from seat availability calculations immediately, based on their expiration timestamps.
+
+## Confirmation
+- Payment is simulated as successful when the confirmation
+  endpoint is called.
+- Only the student who owns a hold can confirm it.
+- Only an unexpired HELD application can transition to CONFIRMED.
+- Repeated confirmation of an already CONFIRMED application
+  returns HTTP 200 without changing the seat count again.
+
+## Cancellation
+- Only an unexpired HELD application can be cancelled.
+- Cancelling a hold changes its status to CANCELLED.
+- Cancellation history is preserved in the database.
+- Repeated cancellation returns HTTP 204.
+- Confirmed admissions cannot be cancelled through this endpoint,
+  because the assignment doesn't define refunds or withdrawal.
+
+## Invalid Operations
+- Invalid student identifiers return HTTP 400.
+- Missing holds or holds belonging to another student return HTTP 404
+  for confirmation and cancellation.
+- Invalid state transitions return HTTP 409.

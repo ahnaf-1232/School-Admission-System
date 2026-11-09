@@ -34,10 +34,7 @@ public class HoldExpirationService : BackgroundService
             }
         }
         catch (OperationCanceledException)
-            when (stoppingToken.IsCancellationRequested)
-        {
-            // Normal application shutdown.
-        }
+            when (stoppingToken.IsCancellationRequested) {}
     }
 
     private async Task ExpireHoldsAsync(
