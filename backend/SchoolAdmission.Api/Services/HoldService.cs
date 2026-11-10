@@ -47,7 +47,7 @@ public class HoldService
     {
         var duration = _configuration.GetValue<int?>("HOLD_DURATION_SECONDS") ?? 600;
 
-        if(duration < 0)
+        if(duration <= 0)
         {
             throw new InvalidOperationException(
                 "HOLD_DURATION_SECONDS must be positive.");

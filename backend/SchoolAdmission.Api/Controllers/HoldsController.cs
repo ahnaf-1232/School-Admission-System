@@ -58,7 +58,7 @@ public class HoldsController : ControllerBase
         {
             return Conflict(new
             {
-                messsage = "This hold cannot be confirmed. It may be expired or cancelled."
+                message = "This hold cannot be confirmed. It may be expired or cancelled."
             });
         }
 
@@ -94,7 +94,7 @@ public class HoldsController : ControllerBase
         {
             return Conflict(new
             {
-                messsage = "Only an active HELD application can be cancelled."
+                message = "Only an active HELD application can be cancelled."
             });
         }
 
