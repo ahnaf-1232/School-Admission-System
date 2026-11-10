@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SchoolAdmission.Api.Data;
 using SchoolAdmission.Api.Services;
 using SchoolAdmission.Api.BackgroundServices;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,18 @@ builder.Services.AddHostedService<HoldExpirationService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy => {
+        policy.WithOrigins(
+            "http://localhost:5173",
+            "http://localhost:3000"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -32,6 +45,10 @@ if (app.Environment.IsDevelopment())
 }
 
 // app.UseHttpsRedirection();
+
+app.UseRouting();
+
+app.UseCors("Frontend");
 
 app.UseAuthorization();
 
