@@ -156,6 +156,50 @@ dotnet test backend/SchoolAdmission.Tests/SchoolAdmission.Tests.csproj --logger 
 
 Use the password matching your local PostgreSQL container. The API in terminal 1 **must** connect to `school_admission_test`, not the development database. The expiration test updates an individual test hold directly in PostgreSQL; do not point it at real data. `dotnet test` requires the SDK; running the **application itself** via Compose does not.
 
+
+### Two backend instances sharing PostgreSQL
+
+This verifies concurrency safety across **two independent ASP.NET Core API processes** using the **same PostgreSQL database**. The application allocates seats under a PostgreSQL `SELECT ... FOR UPDATE` row lock, so contention is coordinated by the database rather than a process-local C# lock.
+
+**Prerequisites:** Docker Desktop, the complete Compose stack, and a hold duration long enough for the test (default: `HOLD_DURATION_SECONDS=600`). Run from the repository root:
+
+```powershell
+docker compose up -d --build
+```
+
+Start a second backend on port 8082. It shares the database configured for the existing backend, while disabling a second migration attempt:
+
+```powershell
+docker compose run -d --no-deps --name school-admission-bonus-backend -p 127.0.0.1:8082:8080 -e APPLY_MIGRATIONS=false backend
+```
+
+Verify both API processes respond:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/classes
+Invoke-RestMethod http://localhost:8082/classes
+```
+
+Run the repository's multi-instance stress script:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\Test-MultiInstance.ps1"
+```
+
+The script runs **three rounds** of **50 concurrent hold requests** distributed across both backend ports for a new class with **five seats**. Expected in each round:
+
+- **5** responses with HTTP **201 Created**.
+- **45** responses with HTTP **409 Conflict**.
+- `heldSeats + confirmedSeats <= totalSeats`, with the five-seat class fully occupied.
+
+The test creates records in the development database; it does not clean them up. A passing run demonstrates the intended multi-process behavior under these tested workloads, but is not a proof about all possible schedules.
+
+Stop the additional instance afterward:
+
+```powershell
+docker rm -f school-admission-bonus-backend
+```
+
 ### Frontend checks
 
 With the Compose stack running, manually verify:
@@ -168,7 +212,25 @@ With the Compose stack running, manually verify:
 - Entered student ID restores application history after reopening the browser.
 - Network/API errors and invalid inputs appear as visible messages.
 
-**Frontend automated tests are not yet included** in this repository; this is an optional assignment bonus, not part of the backend xUnit suite.
+### React frontend automated tests
+
+The frontend uses **Vitest**, **React Testing Library**, and **jsdom** to test UI behavior using mocked API calls. Test scenarios include the landing page and portal navigation, 17-digit student ID validation, admin class creation, restoring applications, confirmation, cancellation, expiry handling, and error messages.
+
+**Prerequisites:** Node.js/npm on the machine running the tests, plus the Bonus 2 files (`frontend/vitest.config.ts`, `frontend/tests/App.test.tsx`, and `frontend/tests/setup.ts`) and updated `frontend/package.json` / `package-lock.json` committed to the repository. Docker is **not** needed for these mocked frontend tests.
+
+From the repository root:
+
+```powershell
+cd frontend
+npm ci
+npm test
+npm run build
+cd ..
+```
+
+- `npm ci` installs the dependency versions from `package-lock.json`.
+- `npm test` runs the frontend test suite once.
+- `npm run build` checks the production TypeScript/Vite build afterward.
 
 ## Configuration
 
