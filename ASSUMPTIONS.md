@@ -46,3 +46,13 @@
 - Missing holds or holds belonging to another student return HTTP 404
   for confirmation and cancellation.
 - Invalid state transitions return HTTP 409.
+
+## Bonus: Multiple Backend Instances
+- Two independent ASP.NET Core backend containers share PostgreSQL.
+- The instances are exposed on ports 8080 and 8082.
+- Seat allocation uses PostgreSQL transactions and
+  SELECT FOR UPDATE row locking.
+- A test sends 50 concurrent requests across both instances
+  for a class with 5 seats.
+- The expected result is 5 successful holds and 45 conflicts.
+- The test verifies heldSeats + confirmedSeats <= totalSeats.
